@@ -33,13 +33,18 @@ def main():
         input_placeholder = "ਪਿੰਡ ਦਾ ਨਾਮ ਦਰਜ ਕਰੋ ਜਾਂ ਸਵਾਲ ਪੁੱਛੋ..."
 
     if prompt := st.chat_input(input_placeholder):
+        
+        # ⬅️ NEW: Reset the report state so the old report disappears!
+        st.session_state['confirmed'] = False
+        st.session_state['selected_village_name'] = None
+        st.session_state['extracted_candidates'] = None
+        
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): 
             st.markdown(prompt)
 
         with st.spinner("Analyzing..."):
-            # ⬅️ KEY CHANGE: Detect language and update the GLOBAL session state immediately
-            # This makes "upcoming everything" follow the detected language
+            # Detect language and update the GLOBAL session state immediately
             detected_input_lang = utils.detect_lang(prompt)
             st.session_state['detected_lang'] = detected_input_lang
             lang = st.session_state['detected_lang']
@@ -86,7 +91,7 @@ def main():
                     st.session_state.messages.append({"role": "assistant", "content": msg})
 
     # --- 4. AgGrid Selection Block ---
-    if len(st.session_state['extracted_candidates']) > 0 and not st.session_state['confirmed']:
+    if st.session_state.get('extracted_candidates') and not st.session_state['confirmed']:
         df = pd.DataFrame(st.session_state['extracted_candidates'])
         
         # Rename columns for a cleaner UI
