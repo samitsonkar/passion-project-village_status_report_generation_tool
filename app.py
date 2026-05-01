@@ -3,6 +3,7 @@ import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from src import utils, llm, database, prompts
 from config import settings
+from deep_translator import GoogleTranslator
 
 def main():
     st.set_page_config(page_title=settings.PAGE_TITLE, layout=settings.PAGE_LAYOUT)
@@ -37,24 +38,32 @@ def main():
         st.session_state['selected_village_name'] = None
 
         with st.spinner("Analyzing..."):
-            # Use current session language for chat responses
-            lang = st.session_state.get('detected_lang', 'en')
+            
+            # ⬅️ NEW: Detect the language of the user's chat input
+            chat_lang = utils.detect_lang(prompt)
 
             # Classify Intent using the LLM
             classification = llm.classify_and_extract(prompt)
             intent = classification.get("intent")
             village_name = classification.get("village_name")
 
+            # ⬅️ NEW: Translate the village name back to English for the DB search
+            if village_name and chat_lang == 'pa':
+                try:
+                    village_name = GoogleTranslator(source='pa', target='en').translate(village_name)
+                except Exception as e:
+                    pass # If translation fails, we just try searching with the original text
+
             # Handle different user intents
             if intent == "help_request":
                 msg = "I can help you generate status reports for villages. Just type the name of the village, e.g., 'Show me the report for Baluana'."
-                if lang == 'pa': msg = utils.get_translation(msg)
+                if chat_lang == 'pa': msg = utils.get_translation(msg)
                 with st.chat_message("assistant"): st.info(msg)
                 st.session_state.messages.append({"role": "assistant", "content": msg})
 
             elif intent == "salutation":
                 msg = "Hello! How can I assist you with village reports today?"
-                if lang == 'pa': msg = utils.get_translation(msg)
+                if chat_lang == 'pa': msg = utils.get_translation(msg)
                 with st.chat_message("assistant"): st.success(msg)
                 st.session_state.messages.append({"role": "assistant", "content": msg})
 
@@ -65,18 +74,18 @@ def main():
                 if candidates:
                     st.session_state['extracted_candidates'] = candidates
                     msg = f"Found matches for '{village_name}'. Please select one from the table below."
-                    if lang == 'pa': msg = utils.get_translation(msg)
+                    if chat_lang == 'pa': msg = utils.get_translation(msg)
                     with st.chat_message("assistant"): st.success(msg)
                     st.session_state.messages.append({"role": "assistant", "content": msg})
                 else:
                     msg = prompts.make_nofound_message(village_name)
-                    if lang == 'pa': msg = utils.get_translation(msg)
+                    if chat_lang == 'pa': msg = utils.get_translation(msg)
                     with st.chat_message("assistant"): st.error(msg)
                     st.session_state.messages.append({"role": "assistant", "content": msg})
             
             else:
                 msg = "Please provide a valid village name to generate a report."
-                if lang == 'pa': msg = utils.get_translation(msg)
+                if chat_lang == 'pa': msg = utils.get_translation(msg)
                 with st.chat_message("assistant"): st.write(msg)
                 st.session_state.messages.append({"role": "assistant", "content": msg})
 
